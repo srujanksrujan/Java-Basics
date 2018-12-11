@@ -1,0 +1,11 @@
+<typedefs xmlns="http://www.vzw.com/namespaces/scm" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.vzw.com/namespaces/scm DataServicesSchema.xsd">
+	<typedef type="COR_BillCycleDetailsForCustomer">
+		<attribute name="enterpriseCustomer" type="EnterpriseCustomerModel" dataservice="Cassandra">
+	        <query>
+			SELECT  bl_cyc_no,prev_bl_cyc_no,run_needed_ind,cust_bl_cycle_eff_dt FROM enterprise_customer WHERE cust_id_no = $custIdNo;
+			</query>
+		</attribute>
+		<key attribs="custIdNo"/>
+	</typedef>
+</typedefs>
+

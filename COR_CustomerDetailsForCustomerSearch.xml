@@ -1,0 +1,412 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<typedefs xmlns="http://www.vzw.com/namespaces/scm" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.vzw.com/namespaces/scm DataServicesSchema.xsd">
+	<typedef type="COR_CustomerDetailsForCustomerSearch">
+	
+		<attribute name="intBillSysId" visible="false">
+			<variable>$billSysId.toInteger()</variable>
+		</attribute>
+		
+		<!-- 601 - Step 4, 6, 15, 16, 33-3, 19 -->
+		<attribute dataservice="Cassandra" name="enterpriseCustomer" type="EnterpriseCustomerModel">
+			<query>SELECT cust_stat_cd, stat_reason_cd, cust_typ_cd, orig_eff_dt, cust_class_cd,
+			bsns_consumer_cd, cust_password, cust_assoc_id_no, bsns_nme, fed_tx_id_no, 
+			courtesy_title_cd, given_nme, mdl_init, family_nme, suffix_nme, birth_dt, ssn, 
+			sls_rep_id, cust_arch_stat_cd, source_instance_cd, cust_migrated_dt, 
+			cust_status_eff_dt,	cust_subtyp_cd, cust_subtyp_eff_dt, auth_users, ecpd_profile_id,
+			liability_typ_cd, bl_cyc_no, cust_bl_cycle_eff_dt, prev_bl_cyc_no, run_needed_ind, bl_typ_cd, cust_ecpd_end_dt,cust_subtyp_end_dt, tx_bsns_res_ind
+			FROM enterprise_customer WHERE cust_id_no = $custIdNo</query>
+			<filter>['A','I'].contains(object.custStatCd)</filter>
+		</attribute>
+		<!-- As per typedef review always custEcpdEndDt will be 9999-12-31. Hence commenting it -->
+		<!-- Reverting the changes back because of prod issue in the entity table -->
+		<attribute name="ecpdInfo">
+            <variable>%enterpriseCustomer.findAll{it.custEcpdEndDt == '9999-12-31'}</variable>
+        </attribute>
+		
+		<!-- 601 - Step 5 -->
+		<attribute dataservice="Cassandra" name="blAcct" type="BlAcctModel" visible="false">
+			<query>SELECT svc_offr_cd, acct_no, bl_acct_stat_cd, active_mtns_qty, active_non_mdn_los_qty, bl_typ_cd, bill_sys_id FROM bl_acct WHERE cust_id_no = $custIdNo</query>
+			<filter>billSysId == %intBillSysId</filter>
+		</attribute>
+		
+		<!-- 601 - Step 36 -->
+		<!--
+		<attribute name="blAcctActiveMtnsQtySum" type="BlAcctModel" function="SUM" funtionField="activeMtnsQty" dataservice="Cassandra">
+			<query>SELECT active_mtns_qty, bl_typ_cd, bill_sys_id FROM bl_acct WHERE cust_id_no = $custIdNo</query>
+			<filter>activeMtnsQty != null &amp;&amp; blTypCd == 'C' &amp;&amp; billSysId == %intBillSysId</filter>
+		</attribute>
+		<attribute name="blAcctActiveNonMdnLosQtySum" type="BlAcctModel" function="SUM" funtionField="activeNonMdnLosQty" dataservice="Cassandra">
+			<query>SELECT active_non_mdn_los_qty, bl_typ_cd, bill_sys_id FROM bl_acct WHERE cust_id_no = $custIdNo</query>
+			<filter>activeNonMdnLosQty != null &amp;&amp; blTypCd == 'C' &amp;&amp; billSysId == %intBillSysId</filter>
+		</attribute>
+		-->
+		
+		
+		<attribute name="blAcctActiveMtnsQtySum" visible="true">
+			<variable>
+				def totalMtns= 0 
+			     %blAcct.each{
+			     if (it.activeMtnsQty != null )  {
+				     	totalMtns += it.activeMtnsQty
+				     }
+			     }
+				 totalMtns
+			</variable> 
+		</attribute>
+	
+		<attribute name="blAcctActiveNonMdnLosQtySum" visible="true">
+			<variable>
+				def totalMtns1= 0 
+			     %blAcct.each{
+			     if (it.activeNonMdnLosQty != null )  {
+				     	totalMtns1 += it.activeNonMdnLosQty
+				     }
+			     }
+				 totalMtns1
+			</variable> 
+		</attribute>
+		<!-- 601 - Step 6 - Merged with 1st query -->
+		
+		<!-- 601 - Step 9 -->
+		<attribute dataservice="Cassandra" name="custType" type="CustTypModel">
+			<!--reference_xref change-->
+			<!--   SELECT cust_typ_cd_dsc FROM cust_typ WHERE cust_typ_cd = %enterpriseCustomer.custTypCd -->
+			<query>select nk4_value as cust_typ_cd_dsc from reference_xref where source_table='CUST_TYP' and pk1_value=%enterpriseCustomer.custTypCd</query>
+		</attribute>
+		
+		<!-- 601 - Step 10 -->
+		<attribute dataservice="Cassandra" name="cstArchStatCd" type="CstArchStatCodeModel">
+			<!--reference_xref change-->
+			<!--   SELECT cust_arch_stat_dsc FROM cst_arch_stat_code WHERE cust_arch_stat_cd = %enterpriseCustomer.custArchStatCd -->
+			<query>select nk1_value as cust_arch_stat_dsc from reference_xref where source_table='CST_ARCH_STAT_CODE' and pk1_value=%enterpriseCustomer.custArchStatCd</query>
+		</attribute>
+		
+		<!-- 601 - Step 11 -->
+		<!-- <attribute name="customerContact" type="ContactModel" dataservice="Cassandra">
+            <query>SELECT contact_id_no, addr_attn_line, addr_1, addr_2, addr_3, addr_city_nme, 
+			addr_st_cd, addr_zip_cd,addr_country_cd, addr_loc_geo_cd, addr_care_of_nme,  
+			contact_eff_ts, contact_sub_type FROM contact WHERE cust_id_no = $custIdNo AND 
+			mtn = 'NULL' AND ln_of_svc_id_no_p2 = 0 AND ln_of_svc_id_no_p1 = 0 AND
+			mtn_eff_dt = 'NULL' AND contact_type = 'Address' AND contact_sub_type = 'M'
+			and acct_no = 0 AND bill_sys_id = $billSysId</query>
+		</attribute> -->
+		
+		<attribute dataservice="Cassandra" name="contactInfo" type="ContactModel">
+            <query>SELECT repos_id_no,contact_id_no,contact_type,contact_sub_type,acct_no,bill_sys_id,contact_eff_ts,mtn ,emplr_legal_name, addr_1, addr_city_nme, addr_st_cd, 
+			addr_zip_cd FROM contacts WHERE cust_id_no = $custIdNo AND mtn = 'NULL' AND ln_of_svc_id_no_p2 =0 and bill_sys_id = $billSysId AND LN_OF_SVC_ID_NO_P1 = 0 and mtn_eff_dt = 'NULL'</query>
+			<queryFilters operator="AND">
+				<queryFilter column="acct_no" expression="EQUALS" value="0"/>
+			</queryFilters>
+			<!--<filter>acctNo == 0 &amp;&amp;  billSysId == %intBillSysId</filter>-->
+        </attribute>
+		
+		<attribute dataservice="Cassandra" name="contactReposInfo" type="ContactReposModel" visible="false">
+            <query>SELECT person_usr_handicap_ind,contact_id_no,cbr_person_vip_cd,person_family_nme,person_given_nme,person_mdl_init,person_suffix_nme,person_usr_bsns_title,person_courtesy_title_cd,
+			cbr_mtn,cbr_phone_ext,contact_type,bill_sys_id,email_addr,email_addr_valid_dt,addr_1,addr_2,addr_3,addr_city_nme,addr_zip_cd,addr_attn_line,addr_loc_geo_cd,addr_care_of_nme,
+			addr_country_cd,addr_st_cd FROM contact_repos WHERE contact_id_no = %contactInfo.reposIdNo.contactIdNo</query>
+			<filter>billSysId == %intBillSysId</filter>
+        </attribute>
+		
+		<attribute name="custMailingAddress" visible="false">
+            <variable>%contactInfo.findAll{it.contactType == 'Address' &amp;&amp; it.contactSubType == 'M'}</variable>
+        </attribute>
+		
+		<!--<attribute name="customerContact" type="ContactReposModel" dataservice="Cassandra"> 
+			<query>SELECT contact_id_no, addr_care_of_nme, addr_attn_line, addr_1, addr_2, addr_3,addr_loc_geo_cd,
+			addr_city_nme, addr_st_cd, addr_zip_cd, addr_country_cd FROM contact_repos WHERE contact_id_no = %custMailingAddress.contactIdNo</query>
+		</attribute>-->
+		
+		<attribute name="customerContact"> 
+			<variable>%contactReposInfo.findAll{ %custMailingAddress.reposIdNo.contains(it.contactIdNo)}</variable>
+		</attribute>
+		
+		<attribute name="isAddrLocGeoCd" visible="false">
+            <variable>%customerContact.get(0).addrLocGeoCd != null</variable>
+        </attribute>
+		<attribute name="geoLvl3" visible="false">
+			<conditional>%isAddrLocGeoCd</conditional>
+            <variable>%customerContact.get(0).addrLocGeoCd.substring(5,8)</variable>
+        </attribute>
+		<!-- 601 - Step 12 -->
+		
+		
+		<attribute dataservice="Cassandra" name="taxGeoLvl2" type="ReferenceXrefModel" visible="false">
+			<query>
+				select 
+					ck1_value,pk1_value ,nk1_value
+				from 
+					reference_xref 
+				where source_table = 'TAX_GEO_LVL_2' and
+					pk1_value = 'USA'
+			</query>
+               <filter>%customerContact.addrStCd.contains(object.nk1Value)</filter>		
+	    </attribute>
+		
+		<attribute name="taxGeoLvl2Check" visible="false">
+			<variable>!%taxGeoLvl2.empty</variable>
+		</attribute>
+		
+		<attribute name="geoLvl2" visible="false">
+		<conditional>%taxGeoLvl2Check</conditional>
+			<variable>
+				def filteredList = [] as List
+				def pk1ValueTemp = '';
+					%taxGeoLvl2.each{ 
+						pk1ValueTemp = it.pk1Value+'~~'+it.ck1Value
+						filteredList.add(pk1ValueTemp)					
+					}
+                filteredList				
+			</variable>
+		</attribute>
+		
+		
+		<attribute dataservice="Cassandra" name="taxGeoLvl3" type="TaxGeoLvl3Model">
+			<!--reference_xref change-->
+			<!--   SELECT geo_lvl_3, geo_lvl_3_dsc FROM tax_geo_lvl_3 WHERE country_cd = %taxGeoLvl2.pk1Value.countryCd AND geo_lvl_2 = %taxGeoLvl2.ck1Value.geoLvl2 AND geo_lvl_3 = %geoLvl3 -->
+			<query>select ck1_value as geo_lvl_3,nk1_value as geo_lvl_3_dsc from reference_xref where source_table='TAX_GEO_LVL_3' and pk1_value=%geoLvl2 and ck1_value=%geoLvl3</query>
+		</attribute>
+		
+		<!-- 601 - Step 13 -->
+		<attribute dataservice="Cassandra" name="country" type="CountryModel">
+			<!--reference_xref change-->
+			<!--   SELECT country_dsc FROM country WHERE country_cd = %customerContact.addrCountryCd.countryCd -->
+			<query>select nk2_value as country_dsc from reference_xref where source_table='COUNTRY' and pk1_value=%customerContact.addrCountryCd.countryCd</query>
+		</attribute>
+		
+		<!-- 601 - Step 14 -->
+		<attribute name="strBillSysId" visible="true">
+			<variable>$billSysId</variable>
+		</attribute>
+		<attribute dataservice="Cassandra" name="state" type="StateModel">
+			<!--reference_xref change-->
+			<!--   SELECT st_nme FROM states WHERE st_cd = %customerContact.addrStCd.stCd and bill_sys_id=$billSysId -->
+			<query>select nk4_value as st_nme from reference_xref where source_table='STATE' and pk1_value=%customerContact.addrStCd.stCd and ck1_value=%strBillSysId</query>
+		</attribute>
+		
+		<!-- 601 - Step 15 - Merged with 1st query -->
+		
+		<!-- 601 - Step 16 - Merged with 1st query -->
+		<!--<attribute name="custSubtypEffDt" visible="false">
+			<variable>$currentDate</variable>
+		</attribute>
+		<attribute name="custSubtypEndDt" visible="false">
+			<variable>$currentDate</variable>
+		</attribute>-->
+		<attribute name="customerSubtype">
+			<variable>%enterpriseCustomer.findAll{'SBZ'.equals(it.custSubtypCd) &amp;&amp; it.custSubtypEffDt &lt;= $currentDate &amp;&amp; it.custSubtypEndDt &gt; $currentDate}</variable>
+			<!--<variable>%enterpriseCustomer.findAll{'SBZ'.equals(it.custSubtypCd) &amp;&amp; it.custSubtypEffDt &lt;= $currentDate}</variable>-->
+		</attribute>
+		
+		<!-- 601 - Step 23 -->
+		<!-- Make call to FCST060C to get customer CBR Info -->
+		<!-- FCST060C - START -->
+		<!--DOC : FCST060C - Retrieve Customer Level Info - V1.1.docx - SQL: 2 -->
+		
+		<!-- <attribute name="custPersonInfo" type="ContactModel" dataservice="Cassandra"> 
+			<query>SELECT contact_id_no, person_courtesy_title_cd, person_given_nme, person_mdl_init, person_family_nme, person_suffix_nme, person_usr_bsns_title, person_usr_handicap_ind,
+			cbr_person_vip_cd, contact_sub_type, contact_type FROM contact WHERE cust_id_no = $custIdNo AND mtn = 'NULL' AND 
+			ln_of_svc_id_no_p2 = 0 AND ln_of_svc_id_no_p1 = 0 AND mtn_eff_dt = 'NULL' AND contact_type = 'Person' AND contact_sub_type = 'NULL'
+			AND acct_no = 0 AND bill_sys_id = $billSysId</query>
+		</attribute>-->
+		<attribute name="custPersonInfo"> 
+			  <variable>%contactReposInfo.findAll{it.contactType == 'Person'}</variable>
+		</attribute>
+		
+		<!--DOC : FCST060C - Retrieve Customer Level Info - V1.1.docx - SQL: 3, 5 will return w,h types-->
+		<!--<attribute name="custPhonesInfo" type="ContactModel" dataservice="Cassandra"> 
+			<query>SELECT contact_sub_type, contact_id_no, cbr_mtn, cbr_phone_ext,  
+			ln_of_svc_id_no_p1, mtn_eff_dt, contact_type, acct_no, bill_sys_id FROM 
+			contact WHERE cust_id_no = $custIdNo AND mtn = 'NULL' AND ln_of_svc_id_no_p2 = 0</query>
+			<filter>lnOfSvcIdNoP1 == 0 &amp;&amp; mtnEffDt == 'NULL' &amp;&amp; contactType == 'Phone' &amp;&amp; acctNo == 0 &amp;&amp; billSysId == %intBillSysId</filter>
+		</attribute> -->
+		
+		<attribute name="custPhonesInfo"> 
+			<variable>%contactReposInfo.findAll{it.contactType == 'Phone'}</variable>
+		 </attribute>
+		  <attribute name="custPhoneSubType" visible="false">
+            <variable>%contactInfo.findAll{it.contactType == 'Phone'}</variable>
+        </attribute>
+		
+		<!--DOC : FCST060C - Retrieve Customer Level Info - V1.1.docx - SQL: 4 -->
+		<attribute dataservice="Cassandra" name="phoneDesc" type="CdTableModel"> 
+			<query>SELECT dsc, cd from cd_table where cd_nme = 'PHONE_NO_TYP' AND cd = %custPhoneSubType.contactSubType.cd</query>
+		</attribute>
+		
+		 <attribute name="custEmail" visible="false">
+            <variable>%contactInfo.findAll{it.contactType == 'Email' &amp;&amp; it.contactSubType == 'M' }</variable>
+        </attribute>
+        <attribute name="custAddress" visible="true">
+            <variable>%contactInfo.findAll{it.contactType == 'Address' &amp;&amp; it.contactSubType == 'P'}</variable>
+        </attribute>
+		
+		
+		
+		<!--DOC : FCST060C - Retrieve Customer Level Info - V1.1.docx - SQL: 6 -->
+		<!-- <attribute name="custEmailInfo" type="ContactModel" dataservice="Cassandra"> 
+			<query>SELECT email_addr,contact_id_no,email_addr_valid_dt, contact_sub_type 
+			FROM contact WHERE cust_id_no = $custIdNo AND mtn = 'NULL' AND ln_of_svc_id_no_p2 = 0
+			AND ln_of_svc_id_no_p1 = 0 AND mtn_eff_dt = 'NULL' AND contact_type = 'Email'
+			AND contact_sub_type = 'M' AND acct_no = 0 AND bill_sys_id = $billSysId</query>
+		</attribute>-->
+		
+		<!--<attribute name="custEmailInfo" type="ContactReposModel" dataservice="Cassandra"> 
+			<query>SELECT email_addr,contact_id_no,email_addr_valid_dt  FROM contact_repos WHERE contact_id_no = %custEmail.contactIdNo</query>
+		</attribute>-->
+		
+		<attribute name="custEmailInfo"> 
+			<variable>%contactReposInfo.findAll{%custEmail.reposIdNo.contains(it.contactIdNo)}</variable>
+		</attribute>
+		
+		<!--DOC : FCST060C - Retrieve Customer Level Info - V1.1.docx - SQL: 7 -->
+		<!-- <attribute name="custAddressInfo" type="ContactModel" dataservice="Cassandra"> 
+			<query>SELECT contact_id_no, addr_care_of_nme, addr_attn_line, addr_1, addr_2, addr_3,
+			addr_city_nme, addr_st_cd, addr_zip_cd, addr_country_cd, contact_sub_type
+			FROM contact WHERE cust_id_no = $custIdNo AND mtn = 'NULL' AND ln_of_svc_id_no_p2 = 0
+			AND ln_of_svc_id_no_p1 = 0 AND mtn_eff_dt = 'NULL' AND contact_type = 'Address' AND
+			contact_sub_type = 'P' AND acct_no = 0 AND bill_sys_id = $billSysId</query>
+		</attribute> -->
+		
+		<!--<attribute name="custAddressInfo" type="ContactReposModel" dataservice="Cassandra"> 
+			<query>SELECT contact_id_no, addr_care_of_nme, addr_attn_line, addr_1, addr_2, addr_3,
+			addr_city_nme, addr_st_cd, addr_zip_cd, addr_country_cd FROM contact_repos WHERE contact_id_no = %custAddress.contactIdNo</query>
+		</attribute>-->
+		
+		<attribute name="custAddressInfo"> 
+			<variable>%contactReposInfo.findAll{%custAddress.reposIdNo.contains(it.contactIdNo)}</variable>
+		</attribute>
+		
+		<!-- FCST060C - END -->
+		
+		<!-- 601 - Step 29 -->
+		<!--<attribute name="employerInfo" type="ContactModel" dataservice="Cassandra">
+			<query>SELECT emplr_legal_name, addr_1, addr_city_nme, addr_st_cd,
+			addr_zip_cd, contact_sub_type, contact_id_no FROM contact WHERE cust_id_no = $custIdNo 
+			AND mtn = 'NULL' AND ln_of_svc_id_no_p2 = 0 AND ln_of_svc_id_no_p1 = 0 
+			AND mtn_eff_dt = 'NULL' AND contact_type = 'Employer' AND 
+			contact_sub_type = 'NULL' AND acct_no = 0 AND bill_sys_id = $billSysId</query>
+		</attribute>-->
+		
+		<attribute name="employerInfo">
+			<variable>%contactInfo.findAll{it.contactType == 'Employer'}</variable>
+		</attribute>
+		
+		<!-- 601 - Step 30 -->
+		<!-- FCST656 branch is happening here. But all are split bill related which we can ignore -->
+		<attribute dataservice="Cassandra" name="ecpdProfile" type="EcpdProfileModel">
+			<query>SELECT duns_ultimate_no, ecpd_epod_stat_cd FROM ecpd_profile WHERE ecpd_profile_id = %enterpriseCustomer.ecpdProfileId AND bill_sys_id = $billSysId</query>
+		</attribute>
+		
+		<!-- 601 - Step 35 - Merged with 1st query 
+		<attribute name="enterpriseCustomerBlCycNo">
+			<variable>%enterpriseCustomer.findAll{'C'.equals(it.blTypCd)}</variable>
+		</attribute>
+		-->
+		
+		<!-- 601 - Step 37, 38 -->
+		<attribute name="oneBillAccountForCustomer">
+			<variable>%blAcct.findAll{['A','I','FA','FB','FR','IW'].contains(it.blAcctStatCd)}</variable>
+		</attribute>
+		
+		<!-- 601 - Step 39 -->
+		<!-- Dependency with Step 40. Commenting it since Step 40 is not required
+		<attribute name="cmnParmValue" visible="false">
+			<variable>$custIdNo</variable>
+		</attribute>
+		<attribute name="cmnBatchParms" type="CmnBatchParmsModel" dataservice="Cassandra">
+			<query>SELECT cmn_parm_ind, cmn_parm_value, bill_sys_id FROM cmn_batch_parms WHERE cmn_parm_grp_id = 'CUSTSRCH' AND cmn_parm_ent_id = 'EXCLUDE'</query>
+			<filter>cmnParmValue == %cmnParmValue &amp;&amp; billSysId == %intBillSysId</filter>
+		</attribute>
+		-->
+		
+		<!-- 601 - Step 40 - Not required. Always 41 will be executed-->
+		<!-- 601 - Step 41 -->
+		<!-- To derive Ubicell accessory device/s Indicator by using customer ID + Account NO -->
+		<!-- Commenting it since we are already deriving the same UBI indicator in account level also. So instead of customer level refer account level value in the xsl
+		<attribute name="tempDeviceType" type="DeviceTypeModel" dataservice="Cassandra">
+			<query>SELECT device_id_typ FROM device_type WHERE device_typ = 'UBI'</query>
+		</attribute>
+		<attribute name="lnPrimIdDvc" type="LnPrimIdDvcModel" dataservice="Cassandra">
+			<query>SELECT ln_of_svc_id_no_p1, ln_of_svc_id_no_p2, ln_dvc_id_end_ts, device_id, bill_sys_id FROM ln_prim_id_dvc WHERE cust_id_no = $custIdNo AND acct_no = $acctNo AND device_id_typ = %tempDeviceType.deviceIdTyp</query>
+			<filter>lnDvcIdEndTs == '9999-12-31-23.59.59.999999' &amp;&amp; billSysId == %intBillSysId</filter>
+		</attribute>
+		<attribute name="externalDeviceInfo" type="ExternalDeviceInfoModel" function='COUNT' funtionField='deviceId' dataservice="Cassandra">
+			<query>SELECT device_id, device_typ, bill_sys_id FROM external_device_info WHERE device_id = %lnPrimIdDvc.deviceId</query>
+			<filter>billSysId == %intBillSysId</filter>
+		</attribute>
+		-->
+		
+		<!-- 601 - Step 43 -->
+		<!-- Make a call to 'SCAR612P' to Retrieve Loan Info of the customer -->
+		<!-- SCAR612 - START go for customer_info-->
+		<attribute dataservice="Cassandra" name="chkActiveLoanNoExstsTemp" type="InstallmentLoanByCustIdModel" visible="false">
+		    <conditional>%intBillSysId != 8</conditional>
+			<query>SELECT install_loan_no FROM installment_loan_by_cust_id WHERE cust_id_no = $custIdNo AND bucket_no = #bucketNo AND bill_sys_id = $billSysId and acct_no = %blAcct.acctNo</query>
+		</attribute>
+		<attribute dataservice="Cassandra" name="installmentLoanCustGeneral" type="InstallmentLoanLoanNoModel" visible="false">
+				<query>SELECT install_loan_no,install_loan_typ,bill_sys_id,db_tmstamp FROM installment_loan_loan_no WHERE install_loan_no = %chkActiveLoanNoExstsTemp.installLoanNo AND bill_sys_id = $billSysId</query>
+		</attribute>
+		<!--<attribute name="installmentLoanDvcPaymentPrgm" type="InstallmentLoanCustModel" dataservice="Cassandra">
+			<query>SELECT install_loan_no, install_loan_typ, bill_sys_id FROM installment_loan_cust WHERE cust_id_no = $custIdNo AND bucket_no = #bucketNo AND acct_no = %blAcct.acctNo</query>
+			<filter>installLoanTyp == 'D' &amp;&amp; billSysId == %intBillSysId</filter>
+		</attribute>-->
+		<!-- go for customer_info-->
+			<attribute name="installmentLoanDvcPaymentPrgm" visible="false">
+			<variable>%installmentLoanCustGeneral.findAll{'D'.equals(it.installLoanTyp)}</variable>
+		</attribute> 
+		<!--
+		<attribute name="installmentLoanEdgePrgm" type="InstallmentLoanModel" dataservice="Cassandra">
+			<query>SELECT install_loan_no, install_loan_typ, bill_sys_id FROM installment_loan WHERE cust_id_no = $custIdNo AND acct_no = %blAcct.acctNo</query>
+			<filter>installLoanTyp == 'E' &amp;&amp; billSysId == %intBillSysId</filter>
+		</attribute>
+		-->
+		<!-- go for customer_info.  -->
+		<attribute name="installmentLoanEdgePrgm" visible="false">
+			<variable>%installmentLoanCustGeneral.findAll{'E'.equals(it.installLoanTyp)}</variable>
+		</attribute>
+		<attribute dataservice="Cassandra" function="COUNT" name="pendingLoanCountForDvcPaymentPrgm" type="InstallmentLoanStatusModel">
+			<conditional>%intBillSysId != 8</conditional>
+			<query>SELECT install_loan_no, ln_st_instl_loan_stat_cd, loan_stat_end_ts, bill_sys_id FROM installment_loan_status WHERE install_loan_no = %installmentLoanDvcPaymentPrgm.installLoanNo AND loan_stat_end_ts = '9999-12-31-23.59.59.999999' AND bill_sys_id = $billSysId</query>
+			<filter>['A','S','AA','AR','I','W','X'].contains(object.lnStInstlLoanStatCd)</filter>
+		</attribute>
+		<attribute dataservice="Cassandra" function="COUNT" name="pendingLoanCountForEdgePrgm" type="InstallmentLoanStatusModel">
+			<conditional>%intBillSysId != 8</conditional>
+			<query>SELECT install_loan_no, ln_st_instl_loan_stat_cd, loan_stat_end_ts, bill_sys_id FROM installment_loan_status WHERE install_loan_no = %installmentLoanEdgePrgm.installLoanNo AND loan_stat_end_ts = '9999-12-31-23.59.59.999999' AND bill_sys_id = $billSysId</query>
+			<filter>['A','S','AA','AR','I','W','X'].contains(object.lnStInstlLoanStatCd)</filter>
+		</attribute>
+		<!-- SCAR612 SQL 7 -->
+		<!-- Moved the mtn filter logic to populate class since this typedef is specific to customer
+		<attribute name="equipOrder" type="EquipOrderModel" dataservice="Cassandra">
+			<query>SELECT cust_id_no, install_loan_typ, install_loan_amt, eo_loan_stat_cd, bill_sys_id FROM equip_order_by_acct WHERE cust_id_no = $custIdNo AND acct_no = %blAcct.acctNo AND bucket_no = #bucketNo</query>
+			<filter>installLoanAmt &gt; 0 &amp;&amp; eoLoanStatCd == 'PND' &amp;&amp; billSysId == %intBillSysId</filter>
+		</attribute>
+		<attribute name="equipOrderDvcPaymentPrgm">
+			<variable>%equipOrder.findAll{'D'.equals(it.installLoanTyp)}</variable>
+		</attribute>
+		<attribute name="equipOrderEdgePrgm">
+			<variable>%equipOrder.findAll{'E'.equals(it.installLoanTyp)}</variable>
+		</attribute>-->
+		<!-- As per typedef review keeping the limit as 1000. Need to revisit it later. Go for customer_info. -->
+		<attribute dataservice="Cassandra" name="equipOrderEdgePrgm1" type="EquipOrderModel" visible="false">
+			<conditional>%intBillSysId != 8</conditional>
+			<query>SELECT cust_id_no, mtn, eq_ord_no, netace_loc_id FROM equip_order_by_acct WHERE cust_id_no = $custIdNo AND acct_no = %blAcct.acctNo AND bucket_no = #bucketNo LIMIT 1000</query>
+			<!-- <filter>installLoanAmt &gt; 0 &amp;&amp; eoLoanStatCd == 'PND' &amp;&amp; installLoanTyp == 'E' &amp;&amp; billSysId == %intBillSysId</filter> -->
+        </attribute> 
+		
+		<attribute dataservice="Cassandra" function="COUNT" name="equipOrderEdgePrgm" type="EquipOrderModel">
+			<conditional>%intBillSysId != 8</conditional>
+			<query>SELECT mtn, install_loan_typ, install_loan_amt, eo_loan_stat_cd FROM equip_order WHERE mtn = %equipOrderEdgePrgm1.mtn AND eq_ord_no = %equipOrderEdgePrgm1.eqOrdNo 
+			AND netace_loc_id = %equipOrderEdgePrgm1.netaceLocId AND bill_sys_id = $billSysId</query>
+			<filter>installLoanAmt &gt; 0 &amp;&amp; eoLoanStatCd == 'PND' &amp;&amp; installLoanTyp == 'E'</filter>
+        </attribute>
+
+		<!-- SCAR612 - END -->
+		
+		<attribute dataservice="Cassandra" name="installmentLoanCustGeneric" type="CustomerInfoModel">
+			<conditional>%intBillSysId == 8</conditional>
+			<query>SELECT bill_sys_id, act_dpp_loan_count, act_edge_loan_count, pend_edge_loan_count FROM customer_info WHERE cust_id_no = $custIdNo</query>
+			<filter>billSysId == %intBillSysId</filter>
+		</attribute>
+		
+		<key attribs="custIdNo,billSysId,currentDate"/>
+	</typedef>
+</typedefs>

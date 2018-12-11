@@ -1,0 +1,189 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<typedefs xmlns="http://www.vzw.com/namespaces/scm" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.vzw.com/namespaces/scm DataServicesSchema.xsd">
+	<typedef type="COR_CustomerAccountInfoForMdn">
+
+		<attribute name="serviceNameCheck" visible="true">
+			<variable>
+				if($serviceName == 'retrieveCustomerProfile'){
+					return true
+				} 			
+				return false
+			</variable>
+		</attribute>
+	    <attribute name="retrieveVpcPplanDetails" visible="false">
+			<variable>$serviceName == 'searchByMtnWithSFO'</variable>
+		</attribute>
+		
+		<attribute name="retrieveMtnOrigEffDt" visible="false">
+			<variable>$serviceName == 'searchByMtnWithPaymentHistory'</variable>
+		</attribute>
+		<attribute dataservice="Cassandra" name="blAcctCustMtnForTimestamp" type="BlAcctCustMtnModel" visible="false">
+			<query>SELECT mtn,cust_id_no,acct_no,bl_typ_cd,cust_mtn_stat_cd,stat_reason_cd,mtn_eff_dt,eff_tmstamp,eff_dt,auto_port_cd,port_in_confirm_cd,min_carrier,min_l_dig,min_rest_of_l,
+			vision_user_id_cd,bill_sys_id FROM bl_acct_cust_mtn_by_mtn WHERE mtn = $mtn AND curr_pri_ind = 'C' AND bl_typ_cd = 'C'</query>
+			<filter>billSysId == $billSysId.toInteger()</filter>
+		</attribute>
+		
+		<attribute name="blAcctSortByEffTmstampTemp" visible="false">
+			<variable>%blAcctCustMtnForTimestamp.sort(false, {it.effTmstamp}).reverse()</variable>
+		</attribute>
+		
+		<attribute name="blAcctSortByEffTmstampMax" visible="false">
+			<variable>%blAcctSortByEffTmstampTemp.findAll{it.effTmstamp == %blAcctSortByEffTmstampTemp.get(0).effTmstamp}</variable>
+		</attribute>
+		
+		<attribute name="blAcctCustMtnForAll">
+			<variable>%blAcctSortByEffTmstampMax.sort{it.custMtnStatCd}</variable>
+		</attribute>
+
+		<attribute dataservice="Cassandra" name="blacct" type="BlAcctModel">
+			<conditional>%serviceNameCheck</conditional>
+	        <query>
+				SELECT cust_id_no,acct_no,active_mtns_qty, inactive_mtns_qty, bill_sys_id,estab_dt,bl_acct_stat_cd FROM bl_acct WHERE cust_id_no = %blAcctCustMtnForAll.custIdNo and acct_no = %blAcctCustMtnForAll.acctNo
+			</query>
+			<filter>billSysId == $billSysId.toInteger()</filter>
+		</attribute>
+
+		<attribute dataservice="Cassandra" name="custTypInfo" type="EnterpriseCustomerModel">
+			<query>SELECT cust_typ_cd,cust_class_cd ,cust_stat_cd,liability_typ_cd,ecpd_profile_id, cust_ecpd_end_dt FROM enterprise_customer WHERE cust_id_no = %blAcctCustMtnForAll.custIdNo</query>
+		</attribute>
+		
+		   <!-- check for trial customer  --> 
+		<attribute dataservice="Cassandra" name="vzwSvcProcRulesLTrl" visible="true" type="VzwSvcProcRuleModel"> 
+			<conditional>%serviceNameCheck</conditional>
+			<query>select pk1_value as vzw_svc_cd,nk2_value as vzw_svc_rule_end_dt,nk3_value as vzw_rule_typ_val_num,ck3_value as vzw_rule_typ_seq_no 
+		 	       from reference_xref where source_table='VZW_SVC_PROC_RULE' and pk1_value='TRL' and ck1_value = 'TRL03'</query>
+		       <filter>vzwSvcRuleEndDt == '9999-12-31'  &amp;&amp; vzwRuleTypValNum == %blAcctCustMtnForAll.get(0).custIdNo.toInteger() </filter> 
+		
+		</attribute>
+		
+		<attribute name="enterpriseCustomerEcpd">
+			<variable>%custTypInfo.findAll{it.custEcpdEndDt == '9999-12-31'}</variable>
+		</attribute>
+
+		<attribute name="statReasonCd" visible="false">
+			<variable>%blAcctCustMtnForAll.get(0).statReasonCd</variable>
+		</attribute>
+
+		<!-- 603C.12 -->
+		<attribute dataservice="Cassandra" name="nonActStatReason" type="NonactStatReasonModel">
+			<!--reference_xref change-->
+			<!--   SELECT stat_reason_dsc,stat_reason_cd FROM nonact_stat_reason WHERE stat_reason_cd = %statReasonCd -->
+			<query>select nk4_value as stat_reason_dsc,pk1_value as stat_reason_cd from reference_xref where source_table='NONACT_STAT_REASON' and pk1_value=%statReasonCd</query>
+		</attribute>
+
+		<attribute name="pk1Value" visible="false">
+			<variable>%blAcctCustMtnForAll.get(0).portInConfirmCd</variable>
+		</attribute>
+		<!-- 603C.14 -->
+		
+		<attribute dataservice="Cassandra" name="portInConfrmDsc" type="ReferenceXrefModel">
+            <query>SELECT pk1_value,nk1_value FROM reference_xref WHERE source_table = 'PORT_IN_CONFIRM' and pk1_value = %pk1Value</query>
+        </attribute>
+		
+		<!-- Start - May'17 release changes -->
+		<attribute name="lnId" visible="false">
+			<variable>$mtn</variable>
+		</attribute>
+		
+		<attribute name="intBillSysId" visible="false">
+			<variable>$billSysId.toInteger()</variable>
+		</attribute>
+
+	<attribute dataservice="Cassandra" name="lnPrimMultiIdGeneric" type="LnPrimMultiIdModel" visible="false">
+			<query>SELECT ln_multi_id_eff_ts, ln_of_svc_id_no_p2,ln_of_svc_id_no_p1,multi_id_typ FROM ln_prim_multi_id WHERE ln_id = %lnId and ln_id_typ = 'MTN'  </query>
+			<filter>multiIdTyp == 'SEG'</filter>
+	</attribute>
+	
+	<attribute dataservice="Cassandra" name="lnOfSvcCust" type="LnOfSvcCustP1P2Model" visible="false">
+		<query>SELECT cust_id_no, acct_no, ln_of_svc_id_no_p2, ln_of_svc_id_no_p1, bill_sys_id FROM ln_of_svc_cust_p1_p2 WHERE ln_of_svc_id_no_p2 = %lnPrimMultiIdGeneric.lnOfSvcIdNoP2 AND ln_of_svc_id_no_p1 = %lnPrimMultiIdGeneric.lnOfSvcIdNoP1</query>
+		<filter>billSysId == %intBillSysId</filter>
+	</attribute>
+	
+	 <attribute dataservice="Cassandra" name="blAcctLnStat" type="LnOfSvcCustModel" visible="false">		    
+			<query>select source_table,eff_ts,ba_ln_stat_end_ts,ln_of_svc_id_no_p1,ln_of_svc_id_no_p2,bill_sys_id from ln_of_svc_cust where cust_id_no = %lnOfSvcCust.custIdNo
+			AND acct_no = %lnOfSvcCust.acctNo AND bucket_no = #bucketNo and source_table = 'BL_ACCT_LN_STAT' and bill_sys_id= $billSysId AND ln_of_svc_id_no_p2 = %lnOfSvcCust.lnOfSvcIdNoP2 AND ln_of_svc_id_no_p1 = %lnOfSvcCust.lnOfSvcIdNoP1</query>	
+	</attribute>
+	
+	<attribute name="maxBaLnStatEffTs" visible="false">
+          <variable>%blAcctLnStat.sort(false, {it.effTs}).reverse().get(0)</variable>
+    </attribute>
+	
+	<attribute name="lnPrimMultiId" visible="false">
+		<variable>
+			import com.vzwcorp.dagv.data.model.LnPrimMultiIdModel
+			def lnPrimMultiIdList = []
+			%lnPrimMultiIdGeneric.each{
+				def p2 = it.lnOfSvcIdNoP2
+				def p1 = it.lnOfSvcIdNoP1
+				if(%maxBaLnStatEffTs.lnOfSvcIdNoP2 == p2 &amp;&amp; %maxBaLnStatEffTs.lnOfSvcIdNoP1 == p1){
+					lnPrimMultiIdList.add(it)
+				}
+			}
+			lnPrimMultiIdList
+		</variable>
+	</attribute>
+	<attribute name="maxLnMultiIdEffTs">
+          <variable>%lnPrimMultiId.sort(false,{it.lnMultiIdEffTs}).reverse()</variable>
+    </attribute>
+	<!-- End - May'17 release changes -->
+	  <attribute dataservice="Cassandra" name="vpcSlidePplanList" type="OrConfigModel" visible="false">
+	  <conditional>%retrieveVpcPplanDetails</conditional>
+                      <query>
+                            select value from or_config where namespace='common' and key='vpc_tiered_slide_pplan_ids'
+                      </query>
+      </attribute>
+	
+		  <attribute name="vpcSlidePplanIds" type="PplanMtnModel" visible="false">
+	      	<variable><![CDATA[
+                     def custnum
+                     def acctnum
+                     if(!%blAcctCustMtnForAll.isEmpty() && null != %blAcctCustMtnForAll.get(0).custIdNo) {
+                            custnum = %blAcctCustMtnForAll.get(0).custIdNo
+                     }
+                     
+                     if(!%blAcctCustMtnForAll.isEmpty() && null != %blAcctCustMtnForAll.get(0).acctNo) {
+                            acctnum = %blAcctCustMtnForAll.get(0).acctNo
+                     }
+                              import com.vzwcorp.dagv.data.model.PplanMtnModel  
+                              def slidePplanArray = %vpcSlidePplanList.get(0).value.split(',').collect{it as Integer}
+                              def slidePplanList  = []
+                              slidePplanArray.each{slidePplanList.add(new PplanMtnModel (pplanIdNo:it,custIdNo:custnum,acctNo:acctnum))}   
+                              return slidePplanList
+                      ]]>
+
+	    	</variable>
+	     </attribute>
+           
+         <attribute dataservice="Cassandra" name="mtnWithSlidePlans" type="PplanMtnModel" visible="false">
+               <conditional>!%vpcSlidePplanIds.isEmpty()</conditional>             
+               <query>SELECT mtn,curr_pri_ind,pplan_id_no, mtn_eff_dt,eff_tmstamp,end_dt,cust_id_no,acct_no, bill_sys_id FROM pplan_mtn where cust_id_no = %vpcSlidePplanIds.custIdNo AND acct_no = %vpcSlidePplanIds.acctNo AND bucket_no = #bucketNo and
+                    pplan_id_no = %vpcSlidePplanIds.pplanIdNo LIMIT 300
+               </query>
+		       <filter>currPriInd == 'C' &amp;&amp; endDt == '9999-12-31' &amp;&amp; billSysId == %intBillSysId</filter>
+	     </attribute>
+	       
+	       <!-- all Mtn on Slide plan id's  -->
+	     <attribute dataservice="Cassandra" name="activeSlidePplanMtn" type="BlAcctCustMtnModel" visible="true">
+			<query>SELECT mtn,bill_sys_id,curr_pri_ind,cust_id_no,cust_mtn_stat_cd,acct_no,mtn_eff_dt,mtn,end_dt,eff_dt,stat_reason_cd FROM bl_acct_cust_mtn_by_mtn WHERE mtn = %mtnWithSlidePlans.mtn AND bl_typ_cd ='C' AND curr_pri_ind ='C'</query>
+			<filter>['A','AT','S','B','AC','AR'].contains(object.custMtnStatCd) &amp;&amp; custIdNo == %mtnWithSlidePlans.get(0).custIdNo &amp;&amp; acctNo == %mtnWithSlidePlans.get(0).acctNo &amp;&amp; billSysId == %intBillSysId</filter>
+		 </attribute> 	
+		 
+		 <!-- 18.08  Changes  done to Populate Original Mtn-EFF-DT in response  -->	
+		 <attribute name="custMtnDefinedInfo" dataservice="Cassandra" type="CustomerMtnModel" visible="false">
+		 <conditional>%retrieveMtnOrigEffDt</conditional>
+			<query>select cust_id_no,mtn,mtn_eff_dt,pre_mtn_eff_tmstamp, bill_sys_id,orig_mtn_eff_dt from cust_mtn where cust_id_no=%blAcctCustMtnForAll.custIdNo 
+			       and bucket_no=#bucketNo and bill_sys_id = $billSysId and mtn=$mtn and mtn_eff_dt = %blAcctCustMtnForAll.mtnEffDt</query>
+			<filter>preMtnEffTmstamp != null</filter>
+		</attribute>
+		
+		<attribute name="prevLatestCustMtnEffTmstamp" visible="false">
+			<variable>%custMtnDefinedInfo.sort{a,b  -> b.preMtnEffTmstamp &lt;=> a.preMtnEffTmstamp}</variable>
+		</attribute>
+		
+		<attribute name="prevLatestCustMtn" dataservice="Cassandra" visible="true" type="CustomerMtnModel">
+			<variable>%prevLatestCustMtnEffTmstamp.get(0)</variable>
+		</attribute>
+			
+		<key attribs="mtn,billSysId,serviceName"/>
+	</typedef>
+</typedefs>
