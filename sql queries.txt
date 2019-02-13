@@ -1,0 +1,108 @@
+
+===========S.No. 7 query
+
+"DECLARE PROFILE_TMPLS CURSOR FOR                        
+  SELECT A.TX_XMPT_TMPL_ID                              
+        ,DATE(A.ECPD_TMPL_EFF_TMST)                     
+        ,A.ECPD_TMPL_END_DT                             
+        ,CHAR(A.ECPD_TMPL_END_DT,ISO)                   
+  FROM ECPD_EXEMPT_TMPL A                               
+  WHERE A.ECPD_PROFILE_ID   =  :TB11159-ECPD-PROFILE-ID 
+  AND   A.TX_XMPT_TMPL_ID   >= :TB11159-TX-XMPT-TMPL-ID 
+  AND   A.ECPD_TMPL_EFF_TMST =                          
+      (SELECT MAX(B.ECPD_TMPL_EFF_TMST)                 
+       FROM ECPD_EXEMPT_TMPL B                          
+       WHERE B.ECPD_PROFILE_ID = A.ECPD_PROFILE_ID      
+       AND   B.TX_XMPT_TMPL_ID = A.TX_XMPT_TMPL_ID)     
+ ORDER BY TX_XMPT_TMPL_ID                               
+ WITH UR      
+                                          
+  EXEC SQL                                 
+    FETCH PROFILE_TMPLS                    
+      INTO :TB11159-TX-XMPT-TMPL-ID        
+        ,  :WS-ECPD-TMPL-EFF-DT            
+        ,  :TB11159-ECPD-TMPL-END-DT       
+        ,  :WS-ECPD-TMPL-END-DT-ISO        
+  END-EXEC                                 "
+
+
+
+====================S.No. 8 query
+
+"SELECT 1                                             
+INTO :WS-COUNT                                       
+FROM ECPD_PROFILE_CUST  A                            
+    ,BA_EXEMPT_TMPL     B                            
+WHERE A.ECPD_PROFILE_ID   = :TB01811-ECPD-PROFILE-ID 
+AND   A.CUST_ECPD_END_DT  = '12/31/9999'             
+AND   A.CUST_ID_NO        = B.CUST_ID_NO             
+AND   B.TX_XMPT_TMPL_ID   = :TB11158-TX-XMPT-TMPL-ID 
+AND   B.BA_TMPL_END_DT    > :WS-CURRENT-DT-ISO       
+FETCH FIRST 1 ROW ONLY                               
+WITH UR                                              "
+
+====================S.No. 9 query
+
+"SELECT 1                                                 
+   INTO :WS-COUNT                                        
+   FROM ECPD_EXEMPT_TRAN  A                              
+       ,ECPD_PROFILE_CUST B                              
+WHERE A.ECPD_PROFILE_ID    = :TB11160-ECPD-PROFILE-ID    
+AND   A.XMPT_TRAN_REQ_TYP  = :TB11160-XMPT-TRAN-REQ-TYP  
+AND   A.COMPLETE_TMSTAMP   =                             
+           :WS-COMPLETE-TMSTAMP-INT                      
+AND   A.ECPD_PROFILE_ID    = B.ECPD_PROFILE_ID           
+AND   B.CUST_ECPD_END_DT   = '12/31/9999'                
+AND NOT EXISTS                                           
+    (SELECT 1                                            
+     FROM BA_EXEMPT_TMPL    Y                            
+     WHERE B.CUST_ID_NO       = Y.CUST_ID_NO             
+     AND   Y.TX_XMPT_TMPL_ID  = :TB11160-TX-XMPT-TMPL-ID 
+     AND   Y.BA_TMPL_END_DT   > :WS-CURRENT-DT-ISO)    
+FETCH FIRST 1 ROW ONLY                                 
+WITH UR                                                
+
+"
+
+====================S.No. 11 query
+
+"SELECT 1                                                 
+INTO :WS-COUNT                                           
+FROM ECPD_PROFILE_CUST  A                                
+    ,PENDING_TAX_EXEMPT B                                
+WHERE A.ECPD_PROFILE_ID   = :TB01811-ECPD-PROFILE-ID     
+AND   A.CUST_ECPD_END_DT  = '12/31/9999'                 
+AND   A.CUST_ID_NO        = B.CUST_ID_NO                 
+AND NOT EXISTS                                           
+    (SELECT 1                                            
+     FROM BA_EXEMPT_TMPL    Y                            
+     WHERE Y.CUST_ID_NO       = B.CUST_ID_NO             
+     AND   Y.ACCT_NO          = B.ACCT_NO                
+     AND   Y.TX_XMPT_TMPL_ID  = :TB11158-TX-XMPT-TMPL-ID 
+     AND   Y.BA_TMPL_END_DT   > :WS-CURRENT-DT-ISO)      
+FETCH FIRST 1 ROW ONLY                                   
+WITH UR                                                  "
+
+
+====================S.No. 12 query
+
+"SELECT 1                                                 
+   INTO :WS-COUNT                                        
+   FROM ECPD_EXEMPT_TRAN  A                              
+       ,ECPD_PROFILE_CUST B                              
+WHERE A.ECPD_PROFILE_ID    = :TB11160-ECPD-PROFILE-ID    
+AND   A.XMPT_TRAN_REQ_TYP  = :TB11160-XMPT-TRAN-REQ-TYP  
+AND   A.COMPLETE_TMSTAMP   =                             
+           :WS-COMPLETE-TMSTAMP-INT                      
+AND   A.ECPD_PROFILE_ID    = B.ECPD_PROFILE_ID           
+AND   B.CUST_ECPD_END_DT   = '12/31/9999'                
+AND NOT EXISTS                                           
+    (SELECT 1                                            
+     FROM BA_EXEMPT_TMPL    Y                            
+     WHERE B.CUST_ID_NO       = Y.CUST_ID_NO             
+     AND   Y.TX_XMPT_TMPL_ID  = :TB11160-TX-XMPT-TMPL-ID 
+     AND   Y.BA_TMPL_END_DT   > :WS-CURRENT-DT-ISO)    
+FETCH FIRST 1 ROW ONLY                                 
+WITH UR                                                
+
+"
